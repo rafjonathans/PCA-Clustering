@@ -1,0 +1,141 @@
+---
+title: "PCA_Clustering"
+author: "RJ"
+date: "8/15/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## PCA and Clustering
+
+This document summarize the learning activity using the dataset provided in [Planning Public Policy in Argentina](https://www.datacamp.com/projects/638). The original learning method is clearly explained in datacamp. A source in [kaggle](https://www.kaggle.com/gargimaheshwari/planning-public-policy-in-argentina/) might follow the original, added with the notebook owner's improvement. The kaggle source will be the learning source for this exercise.
+
+The provided data shows the economical dan social indicators of each province. Indicators are highly correlated, which need to be confirmed by research on socioeconomical. According to writer perspective, considering the PCA explanation on [Python Machine Learning](http://diggerdnepr.ddns.net/wp-content/uploads/2019/02/python-machine-learning-2nd.pdf), feature reduction through extraction will help in clustering process by maintaining the relevant information in the original data.
+>PCA helps us to identify patterns in data based on the correlationbetween features - Python Machine Learning
+
+
+### Preparation
+Call the required library and dataset
+
+```{r}
+library(tidyverse)
+library(FactoMineR) # For PCA preprocessing
+library(factoextra) # For PCA data visualization
+library(ggrepel)
+
+argentina <- read.csv(choose.files())
+head(argentina)
+```
+
+The datasets has 11 variables which includes:
+1. **province**: Argentina's provinces
+2. **gdp**: a measure of the size of a province’s economy
+3. **illiteracy**: Adult illiteracy is defined as the percentage of the population aged 15 years and over who cannot both read and write with understanding a short simple statement on his/her everyday life. According to [UNESCO](http://uis.unesco.org/en/glossary-term/adult-literacy-rate#:~:text=Adult%20illiteracy%20is%20defined%20as,on%20his%2Fher%20everyday%20life.)
+4. **poverty**:  the ratio of the number of people (in a given age group) whose income falls below the poverty line
+5. **deficient_infra**: 
+6. **school_dropout**: rate of school drop out
+7. **no_healthcare**: rate of people wihtout healthcare 
+8. **birth_mortal**: birth mortality rate
+9. **pop**: population
+10. **movie_theatres_per_cap**: 
+11. **doctors_per_cap**: ratio of doctors and population
+
+To measure the province economic condition, GDP per capita is more relevant.
+PCA feature extraction will be performed by using the factominer package. As the factominer PCA process require the input format in matrix, the current individual data point will be casted. 
+
+
+```{r}
+
+argentina_matrix <- argentina %>% 
+  mutate(gpd_per_capita = gdp/pop) %>% 
+  select_if(is.numeric) %>% 
+  as.matrix()
+
+head(argentina_matrix)
+```
+
+
+### Feature Reduction
+
+Factominer::PCA function ease the research by automatically shows the PCA biplot. The first two principal components represent around 63% of the original data variance. The cummulative  
+```{r}
+argentina_pca <- PCA(argentina_matrix, scale.unit = T)
+fviz_eig(argentina_pca)
+```
+
+
+### Clustering
+At this point, clustering is performed by using 2 first principal component. 
+```{r}
+argentina_component <- tibble(pca_1 = argentina_pca$ind$coord[,1],
+                              pca_2 = argentina_pca$ind$coord[,2]) 
+
+# Clustering via kmeans algorithm
+argentina_kmeans <- kmeans(argentina_component, centers = 4, nstart = 20, iter.max = 50)
+argentina_kmeans
+```
+
+#### Visualize the clustering result
+1. In the selected principal component 
+```{r}
+fviz_pca_ind(argentina_pca, 
+             habillage = as.factor(argentina_kmeans$cluster))
+
+```
+
+2. In the initial original data
+As can be seen in PCA biplot, in PCA-2, GDP and Population are in the same direction. Plotting will be performed by using GDP, Population and GPD per capita information. 
+```{r}
+argentina %>% 
+  mutate(cluster = as.factor(argentina_kmeans$cluster)) %>% 
+  ggplot(aes(x = cluster,
+                 y = gdp/1000000,
+                 color = cluster)) +
+  geom_point() +
+  geom_text_repel(aes(label = province), show.legend = FALSE) + #to use this, aes should be in ggplot, not in geom_point
+  labs(x = "Cluster",
+       y = "GDP in million",
+       title = "Argentina's GDP vs Province Clusters") 
+```
+
+```{r argentina, echo=FALSE, eval=FALSE}
+argentina %>% 
+  mutate(cluster = as.factor(argentina_kmeans$cluster)) %>% 
+  ggplot(aes(x = cluster,
+                 y = gpd_per_capita,
+                 color = cluster)) +
+  geom_point() +
+  geom_text_repel(aes(label = province), show.legend = FALSE) + #to use this, aes should be in ggplot, not in geom_point
+  labs(x = "Cluster",
+       y = "GDP per capita",
+       title = "Argentina's GDP per capita vs Province Clusters") 
+```
+
+```{r}
+argentina %>% 
+  mutate(cluster = as.factor(argentina_kmeans$cluster)) %>% 
+  ggplot(aes(x = cluster,
+                 y = poverty,
+                 color = cluster)) +
+  geom_point() +
+  geom_text_repel(aes(label = province), show.legend = FALSE) + #to use this, aes should be in ggplot, not in geom_point
+  labs(x = "Cluster",
+       y = "Poverty Rate",
+       title = "Argentina's Poverty vs Province Clusters") 
+
+```
+
+Findings:
+
+1. PCA-1 describes the economic condition of the province. Negative direction means the province has a good economic condition, while the positive means the province tends to have a low GPD per capita or high poverty rate
+
+
+```{r}
+
+```
+
